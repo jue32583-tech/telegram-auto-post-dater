@@ -1,0 +1,36 @@
+# Environment variables (NEVER commit!)
+.env
+.env.local
+
+# Telegram session files
+*.session
+*.session-journal
+
+# Logs
+logs/
+*.log
+
+# PID file
+bot.pid
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Data
+bot_data.json
+
+# OS
+.DS_Store
+Thumbs.db
