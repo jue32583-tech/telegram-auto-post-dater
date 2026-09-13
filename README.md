@@ -1,127 +1,112 @@
 # Telegram Auto Post Bot
 
-> Source Channel က post များကို auto-repost လုပ်ပေးသော Telegram Bot
->
-> **Admin မဖြစ်ဘဲ Channel Link ပေးရုံဖြင့် post ဖတ်နိုင်ပါသည်!**
-> **ဖုန်းပိတ်ထားလဲ Server မှာ 24/7 run ထားနိုင်ပါသည်!**
+A Telegram bot for **authorized** auto-posting. It has two safe modes:
 
----
+1. **Approved-source mode:** the bot reads posts only from channels where the bot/account has access and that an admin explicitly added with `/addchannel`.
+2. **User-submission mode:** an admin sends a photo/video to the bot, and the bot posts it to the configured target channel.
 
-## 📋 Bot ၏ လုပ်ဆောင်ချက်များ
+The bot does not bypass channel permissions, scrape inaccessible channels, remove other people's logos, or hide source/copyright information.
 
-| Button | လုပ်ဆောင်ချက် |
-|---|---|
-| ⚙️ Channel Setup | Source Channel နှင့် Target Channel (A, B, C) ထည့်သွင်း |
-| 🔄 Start Forwarding | Auto-forward စတင် |
-| ⏹️ Stop Forwarding | Auto-forward ရပ်ဆိုင်း |
-| 📊 Status | Bot Status ကြည့်ရှု |
-| 🔧 Settings | Forward Mode ပြောင်း, Data Reset |
-| ❓ Help | အကူအညီ |
+## Admins
 
----
+The code allows exactly these three admin IDs:
 
-## 📤 Channel Format
+| Username | Telegram ID |
+|---|---:|
+| `@waiyanphyo99` | `6081621017` |
+| `@waiyan7861` | `6940887457` |
+| `@Bingopop1991` | `6432487408` |
 
-| Channel | ပုံစံ |
-|---|---|
-| **Channel A** | ပုံ + ဇာတ်ညွန် + Channel Link + Video Link (text) |
-| **Channel B** | Video forward |
-| **Channel C** | နောက်ထပ် post (ပုံ + ဇာတ်ညွန်) |
+Non-admin users receive `❌ Admin များသာ သုံးနိုင်ပါတယ်။` for admin commands.
 
----
+## Environment
 
-## 🚀 Quick Start
+Copy `.env.example` to `.env` and fill in real values. Never commit `.env` or tokens.
 
-### Step 1: Clone and Install
-
-```bash
-git clone https://github.com/jue32583-tech/telegram-auto-post-bot.git
-cd telegram-auto-post-bot
-pip3 install -r requirements.txt
+```env
+API_ID=your_api_id
+API_HASH=your_api_hash
+BOT_TOKEN=your_new_bot_token
+TARGET_CHANNEL=@your_own_target_channel
+SESSION_NAME=auto_post_bot_session
+DATA_FILE=bot_data.json
 ```
 
-### Step 2: Setup .env
+`TARGET_CHANNEL` must be a channel owned by you or one where the bot has permission to post. You can also set it inside Telegram with `/settarget`.
+
+If a token was exposed in a screenshot or chat, revoke it in BotFather and create a new token before running the bot.
+
+## Burmese commands and buttons
+
+- `/start` — `🤖 Bot အလုပ်လုပ်နေပါပြီ` and the main buttons
+- `/rules` — rules
+- `/help` — general help and admin command help
+- `/status` — enabled state, channel counts, and post counters
+- `/channels` — approved source and target list
+- `/addchannel` — add an authorized source channel
+- `/removechannel` — remove a source channel
+- `/settarget` — set your target channel
+- `/post` — send media to the bot for reposting
+- `/on` and `/off` — enable/disable approved-source auto-posting
+- `/stats` — statistics
+
+The same actions are available from Burmese buttons after `/start`.
+
+## Channel setup
+
+1. Add the bot as an administrator in your own target channel.
+2. If using approved-source mode, add the bot/account to each source channel as required by Telegram and ensure you have permission to repost the content.
+3. Send `/settarget` and send the target channel username or link.
+4. Send `/addchannel` and send an authorized source channel username or link.
+5. Send `/on`.
+6. For user-submission mode, send `/post`, then send a photo/video with its caption.
+
+The bot adds a source attribution line when reposting an approved source post. Logo removal and source hiding are intentionally not implemented.
+
+## Termux: foreground test
 
 ```bash
+pkg update -y
+pkg install python git clang rust openssl -y
+git clone https://github.com/jue32583-tech/telegram-auto-post-dater.git
+cd telegram-auto-post-dater
+pip install -r requirements.txt
 cp .env.example .env
+nano .env
+python bot.py
 ```
 
-`.env` file ကို edit:
-```
-API_ID=3841104
-API_HASH=3c7752a29b4cc0ec9daf6e1782c0b4e2
-BOT_TOKEN=8249701481:AAGsVCusZe5Dn8MJkPwGqMyeFVsJtlij3Bo
-```
+## Termux: 24/7 background service
 
-### Step 3: Run
+For a restartable service, install `termux-services`:
 
-**Local testing:**
 ```bash
-python3 bot.py
+pkg install termux-services -y
+source $PREFIX/etc/profile.d/start-services.sh
+cd ~/telegram-auto-post-dater
+chmod +x termux/run-bot.sh termux/install-service.sh
+./termux/install-service.sh
+sv up telegram-auto-post-bot
+sv status telegram-auto-post-bot
+tail -f logs/current
 ```
 
-**24/7 Server (ဖုန်းပိတ်ထားလဲ run):**
+Stop or restart it with:
+
 ```bash
-bash deploy.sh
+sv down telegram-auto-post-bot
+sv up telegram-auto-post-bot
 ```
 
-**Restart:**
-```bash
-bash deploy_restart.sh
-```
+Keep Android from stopping Termux:
 
----
+- Android Settings → Apps → Termux → Battery → **Unrestricted**.
+- Do not swipe Termux away from recent apps.
+- Install Termux:Boot if the bot must start after a phone reboot; create `~/.termux/boot/start-bot` containing `sv up telegram-auto-post-bot` and run `chmod +x ~/.termux/boot/start-bot`.
+- `termux-wake-lock` is called by the service and may increase battery use.
 
-## 📱 Telegram မှာ အသုံးပြုပုံ
+A phone-based service can still stop when the phone loses power, data, or Android terminates the app. For reliable unattended 24/7 operation, use an always-on server.
 
-1. Bot ကို `/start` ပေးပို့ပါ
-2. ⚙️ Channel Setup → Source Channel Link ထည့်ပါ
-3. Channel A, B, C ထည့်ပါ (Admin ထည့်ရမည်)
-4. 🔄 Start Forwarding နှိပ်ပါ
+## Security
 
----
-
-## ⚠️ အရေးကြီး
-
-- **Source Channel:** Admin မလို - Link ပေးရုံဖြင့် post ဖတ်နိုင်
-- **Target Channel (A, B, C):** Bot ကို Admin ထည့်ထားရမည်
-- **30 စက္ကန့်တိုင်း** source channel ကို auto-check
-- **ကြိုက်သလောက်** Source Channel Link ထည့်နိုင်
-- **Server မှာ run ထားရင်** ဖုန်းပိတ်ထားလဲ auto-forward အလုပ်လုပ်
-
----
-
-## 🖥️ Server မှာ 24/7 Run ထားဖို့
-
-### Railway (Free)
-1. https://railway.app မှာ account ဖွင့်
-2. New Project → Deploy from GitHub
-3. Environment Variables: API_ID, API_HASH, BOT_TOKEN
-4. Deploy!
-
-### VPS (DigitalOcean, AWS)
-```bash
-sudo apt update && sudo apt install python3 python3-pip -y
-git clone https://github.com/jue32583-tech/telegram-auto-post-bot.git
-cd telegram-auto-post-bot
-pip3 install -r requirements.txt
-bash deploy.sh
-```
-
----
-
-## 🔧 Commands
-
-| Command | Description |
-|---|---|
-| `python3 bot.py` | Bot run (foreground) |
-| `bash deploy.sh` | Bot run (background, 24/7) |
-| `bash deploy_restart.sh` | Bot restart |
-| `tail -f logs/bot.log` | Log ကြည့် |
-| `kill $(cat bot.pid)` | Bot stop |
-
----
-
-## 📝 License
-
-MIT License - Free to use and modify
+Do not paste `BOT_TOKEN`, `API_HASH`, login codes, or two-step verification passwords into chat. The bot never asks users for Telegram login codes or phone verification codes.
