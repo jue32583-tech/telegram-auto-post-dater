@@ -121,11 +121,11 @@ def channel_matches(chat, configured):
 
 def main_keyboard():
     return [
-        [Button.text("📊 အခြေအနေ"), Button.text("📡 Channel စာရင်း")],
-        [Button.text("➕ Source ထည့်"), Button.text("➖ Source ဖယ်")],
-        [Button.text("🎯 Target ထည့်")],
-        [Button.text("🎬 Media တင်"), Button.text("⏯️ Auto Post")],
-        [Button.text("📚 အကူအညီ"), Button.text("📋 စည်းကမ်း")],
+        [Button.inline("📊 အခြေအနေ", b"status"), Button.inline("📡 Channel စာရင်း", b"channels")],
+        [Button.inline("➕ Source ထည့်", b"add_source"), Button.inline("➖ Source ဖယ်", b"remove_source")],
+        [Button.inline("🎯 Target ထည့်", b"set_target")],
+        [Button.inline("🎬 Media တင်", b"submit_media"), Button.inline("⏯️ Auto Post", b"toggle_auto")],
+        [Button.inline("📚 အကူအညီ", b"help"), Button.inline("📋 စည်းကမ်း", b"rules")],
     ]
 
 
@@ -275,6 +275,49 @@ async def button_and_input_handler(event):
         data["pending"].pop(user_key, None)
         save_data(data)
         await event.respond(reply, buttons=main_keyboard())
+
+
+@client.on(events.CallbackQuery)
+async def inline_button_handler(event):
+    if event.sender_id not in ADMIN_IDS:
+        await event.answer("Admin များသာ သုံးနိုင်ပါတယ်။", alert=True)
+        return
+
+    action = event.data.decode("utf-8")
+    data = load_data()
+    user_key = str(event.sender_id)
+    await event.answer()
+
+    if action == "status":
+        await event.edit(status_text(data), parse_mode="HTML", buttons=main_keyboard())
+    elif action == "channels":
+        sources = "\n".join(f"• {item}" for item in data["approved_sources"]) or "မရှိသေးပါ"
+        await event.edit(
+            f"📡 <b>ခွင့်ပြုထားသော Source channels</b>\n\n{sources}\n\n"
+            f"Target: {data['target_channel'] or 'မရှိသေးပါ'}",
+            parse_mode="HTML", buttons=main_keyboard(),
+        )
+    elif action in {"add_source", "remove_source", "set_target"}:
+        data["pending"][user_key] = action
+        save_data(data)
+        prompts = {
+            "add_source": "➕ ခွင့်ပြုချက်ရှိသော source channel link/username ကို ပို့ပါ။",
+            "remove_source": "➖ ဖယ်ရှားမည့် source channel link/username ကို ပို့ပါ။",
+            "set_target": "🎯 ကိုယ်ပိုင် target channel link/username ကို ပို့ပါ။",
+        }
+        await event.edit(prompts[action], buttons=main_keyboard())
+    elif action == "submit_media":
+        data["pending"][user_key] = "submit_media"
+        save_data(data)
+        await event.edit("🎬 Photo/video နှင့် caption ကို ဒီ chat ထဲပို့ပါ။", buttons=main_keyboard())
+    elif action == "toggle_auto":
+        data["enabled"] = not data["enabled"]
+        save_data(data)
+        await event.edit("✅ Auto Post ဖွင့်ပြီးပါပြီ။" if data["enabled"] else "⏹️ Auto Post ပိတ်ပြီးပါပြီ။", buttons=main_keyboard())
+    elif action == "help":
+        await event.edit(HELP, buttons=main_keyboard())
+    elif action == "rules":
+        await event.edit(RULES, buttons=main_keyboard())
 
 
 @client.on(events.NewMessage)
