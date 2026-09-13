@@ -1,4 +1,5 @@
 """Telegram Auto Post Bot with approved-channel and user-submission modes."""
+import asyncio
 import json
 import os
 import re
@@ -140,6 +141,13 @@ def status_text(data):
         f"Warnings: {len(data['warnings'])}"
     )
 
+
+# Python 3.14 no longer creates a default event loop automatically. Telethon
+# 1.x expects one while constructing TelegramClient, so create it explicitly.
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
 
 client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 
