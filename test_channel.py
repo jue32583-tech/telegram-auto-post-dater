@@ -9,7 +9,7 @@ from telethon import TelegramClient
 # Configuration (same as bot.py)
 API_ID = 2000000
 API_HASH = "b18441a1ff607e10a989891a5462e627"
-BOT_TOKEN = "8249701481:AAGsVCusZe5Dn8MJkPwGqMyeFVsJtlij3Bo"
+BOT_TOKEN = "8249701481:AAG7TDbpKCNtoDTFD13j1LgB2EKlae8jfZg"
 SESSION_NAME = "auto_post_bot_session"
 
 
