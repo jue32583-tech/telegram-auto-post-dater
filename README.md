@@ -110,3 +110,20 @@ A phone-based service can still stop when the phone loses power, data, or Androi
 ## Security
 
 Do not paste `BOT_TOKEN`, `API_HASH`, login codes, or two-step verification passwords into chat. The bot never asks users for Telegram login codes or phone verification codes.
+
+## Multiple authorized targets and caption rewrite
+
+`TARGET_CHANNEL` supports one target. For multiple channels, use a comma-separated `TARGET_CHANNELS` value instead:
+
+```env
+TARGET_CHANNELS=@my_channel_one,@my_channel_two
+AUTO_HASHTAGS=#Movie #MyanmarSubtitle
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.0-flash
+```
+
+Use only channels you own or where you have explicit permission to post. The bot posts the same authorized caption/media to every configured target. You can also add targets from Telegram with the `🎯 Target ထည့်` button; each target is appended to the saved list.
+
+When `GEMINI_API_KEY` is set, the bot asks Gemini to rewrite the caption in Burmese while preserving real URLs and attribution. If Gemini is unavailable, the original caption is used. The bot then appends `AUTO_HASHTAGS` and, for approved source posts, a source attribution line.
+
+The bot intentionally does not remove third-party logos/watermarks or hide source links. For owned content, use an original clean media file or add your own branding before submitting it to the bot.

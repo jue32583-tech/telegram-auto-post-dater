@@ -18,6 +18,10 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 SESSION_NAME = os.getenv("SESSION_NAME", "auto_post_bot_session")
 DATA_FILE = Path(os.getenv("DATA_FILE", "bot_data.json"))
 DEFAULT_TARGET_CHANNEL = os.getenv("TARGET_CHANNEL", "")
+TARGET_CHANNELS_ENV = os.getenv("TARGET_CHANNELS", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+AUTO_HASHTAGS = os.getenv("AUTO_HASHTAGS", "#Movie #MyanmarSubtitle")
 
 # Only these three Telegram accounts can use admin controls.
 ADMIN_IDS = {
@@ -63,9 +67,12 @@ _data_lock = threading.Lock()
 
 
 def default_data():
+    targets = [normalize_channel(item) for item in TARGET_CHANNELS_ENV.split(",") if item.strip()]
+    if not targets and DEFAULT_TARGET_CHANNEL:
+        targets = [normalize_channel(DEFAULT_TARGET_CHANNEL)]
     return {
         "approved_sources": [],
-        "target_channel": DEFAULT_TARGET_CHANNEL,
+        "target_channels": targets,
         "enabled": True,
         "pending": {},
         "stats": {"source_posts": 0, "submitted_posts": 0, "failed_posts": 0},
@@ -83,6 +90,8 @@ def load_data():
                     data[key].update(value)
                 else:
                     data[key] = value
+            if not data["target_channels"] and saved.get("target_channel"):
+                data["target_channels"] = [normalize_channel(saved["target_channel"])]
         except (OSError, ValueError) as exc:
             print(f"Data load warning: {exc}")
     return data
@@ -111,6 +120,41 @@ def normalize_channel(value):
     return value.lstrip("@").strip()
 
 
+def rewrite_caption(caption):
+    """Rewrite an authorized caption with Gemini when configured; otherwise keep it."""
+    caption = (caption or "").strip()
+    if not caption or not GEMINI_API_KEY:
+        return caption
+    try:
+        import requests
+        prompt = (
+            "Rewrite this movie caption in Burmese. Keep the meaning and all real links. "
+            "Do not invent facts, remove attribution, or remove URLs. Return only the caption.\n\n"
+            + caption
+        )
+        response = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+            params={"key": GEMINI_API_KEY},
+            json={"contents": [{"parts": [{"text": prompt}]}]},
+            timeout=30,
+        )
+        if response.ok:
+            return response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+        print(f"Gemini caption rewrite skipped: HTTP {response.status_code}")
+    except Exception as exc:
+        print(f"Gemini caption rewrite skipped: {exc}")
+    return caption
+
+
+def build_caption(text, source_name=None):
+    caption = rewrite_caption(text)
+    if AUTO_HASHTAGS:
+        caption = f"{caption}\n\n{AUTO_HASHTAGS}" if caption else AUTO_HASHTAGS
+    if source_name:
+        caption += f"\n\n📎 Source: @{source_name}" if source_name else ""
+    return caption
+
+
 def channel_matches(chat, configured):
     username = (getattr(chat, "username", None) or "").lower()
     chat_id = str(getattr(chat, "id", ""))
@@ -134,7 +178,7 @@ def status_text(data):
         "✅ <b>Bot အခြေအနေ</b>\n\n"
         f"Auto Post: {'🟢 ဖွင့်ထား' if data['enabled'] else '🔴 ပိတ်ထား'}\n"
         f"Source channels: {len(data['approved_sources'])}\n"
-        f"Target: {data['target_channel'] or 'မသတ်မှတ်ရသေး'}\n"
+        f"Targets: {', '.join(data['target_channels']) or 'မသတ်မှတ်ရသေး'}\n"
         f"Source posts: {data['stats']['source_posts']}\n"
         f"Submitted posts: {data['stats']['submitted_posts']}\n"
         f"Failed posts: {data['stats']['failed_posts']}\n"
@@ -168,7 +212,7 @@ async def public_commands(event):
         data = load_data()
         if command == "channels":
             sources = "\n".join(f"• {item}" for item in data["approved_sources"]) or "မရှိသေးပါ"
-            await event.respond(f"📡 <b>ခွင့်ပြုထားသော Source channels</b>\n\n{sources}\n\nTarget: {data['target_channel'] or 'မရှိသေးပါ'}", parse_mode="HTML", buttons=main_keyboard())
+            await event.respond(f"📡 <b>ခွင့်ပြုထားသော Source channels</b>\n\n{sources}\n\nTargets: {', '.join(data['target_channels']) or 'မရှိသေးပါ'}", parse_mode="HTML", buttons=main_keyboard())
         else:
             await event.respond(status_text(data), parse_mode="HTML", buttons=main_keyboard())
 
@@ -262,7 +306,8 @@ async def button_and_input_handler(event):
     elif pending in {"add_source", "remove_source", "set_target"}:
         channel = normalize_channel(text)
         if pending == "set_target" and channel:
-            data["target_channel"] = channel
+            if channel and channel not in data["target_channels"]:
+                data["target_channels"].append(channel)
             reply = f"✅ Target channel သတ်မှတ်ပြီးပါပြီ: {channel}"
         elif pending == "add_source" and channel and channel not in data["approved_sources"]:
             data["approved_sources"].append(channel)
@@ -294,7 +339,7 @@ async def inline_button_handler(event):
         sources = "\n".join(f"• {item}" for item in data["approved_sources"]) or "မရှိသေးပါ"
         await event.edit(
             f"📡 <b>ခွင့်ပြုထားသော Source channels</b>\n\n{sources}\n\n"
-            f"Target: {data['target_channel'] or 'မရှိသေးပါ'}",
+            f"Targets: {', '.join(data['target_channels']) or 'မရှိသေးပါ'}",
             parse_mode="HTML", buttons=main_keyboard(),
         )
     elif action in {"add_source", "remove_source", "set_target"}:
@@ -327,12 +372,14 @@ async def media_submission_handler(event):
     data = load_data()
     if data["pending"].get(str(event.sender_id)) != "submit_media":
         return
-    target = data["target_channel"]
-    if not target:
+    targets = data["target_channels"]
+    if not targets:
         await event.respond("❌ Target channel မသတ်မှတ်ရသေးပါ။ Code ထဲမှာ TARGET_CHANNEL ထည့်ပါ။")
         return
     try:
-        await client.send_file(target, event.media, caption=event.text or "")
+        caption = build_caption(event.text or "")
+        for target in targets:
+            await client.send_file(target, event.media, caption=caption)
         data["stats"]["submitted_posts"] += 1
         await event.respond("✅ Media တင်ပြီးပါပြီ။")
     except Exception as exc:
@@ -351,13 +398,16 @@ async def approved_source_listener(event):
     chat = await event.get_chat()
     if not any(channel_matches(chat, source) for source in data["approved_sources"]):
         return
-    if not data["target_channel"]:
+    if not data["target_channels"]:
         return
     try:
         source_name = getattr(chat, "username", None) or str(chat.id)
-        caption = (event.text or "").strip()
-        footer = f"\n\n📎 Source: @{source_name}" if getattr(chat, "username", None) else ""
-        await client.send_file(data["target_channel"], event.media, caption=caption + footer) if event.media else await client.send_message(data["target_channel"], caption + footer)
+        caption = build_caption(event.text or "", source_name if getattr(chat, "username", None) else None)
+        for target in data["target_channels"]:
+            if event.media:
+                await client.send_file(target, event.media, caption=caption)
+            else:
+                await client.send_message(target, caption)
         data["stats"]["source_posts"] += 1
     except Exception as exc:
         data["stats"]["failed_posts"] += 1
