@@ -4,13 +4,14 @@ Run: python3 test_channel.py @channel_name
 """
 
 import asyncio
+import os
 from telethon import TelegramClient
 
-# Configuration (same as bot.py)
-API_ID = 2000000
-API_HASH = "b18441a1ff607e10a989891a5462e627"
-BOT_TOKEN = "8249701481:AAG7TDbpKCNtoDTFD13j1LgB2EKlae8jfZg"
-SESSION_NAME = "auto_post_bot_session"
+# Configuration comes from environment variables; never commit credentials.
+API_ID = int(os.environ["API_ID"])
+API_HASH = os.environ["API_HASH"]
+BOT_TOKEN = os.environ["BOT_TOKEN"]
+SESSION_NAME = os.environ.get("SESSION_NAME", "auto_post_bot_session")
 
 
 async def main():
