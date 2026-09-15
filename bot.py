@@ -136,7 +136,7 @@ def rewrite_caption(caption):
             f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
             params={"key": GEMINI_API_KEY},
             json={"contents": [{"parts": [{"text": prompt}]}]},
-            timeout=30,
+            timeout=8,
         )
         if response.ok:
             return response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -146,8 +146,15 @@ def rewrite_caption(caption):
     return caption
 
 
-def build_caption(text, source_name=None):
-    caption = rewrite_caption(text)
+async def rewrite_caption_async(caption):
+    """Run blocking Gemini HTTP work away from Telethon's event loop."""
+    if not caption or not GEMINI_API_KEY:
+        return (caption or "").strip()
+    return await asyncio.to_thread(rewrite_caption, caption)
+
+
+async def build_caption(text, source_name=None):
+    caption = await rewrite_caption_async(text)
     if AUTO_HASHTAGS:
         caption = f"{caption}\n\n{AUTO_HASHTAGS}" if caption else AUTO_HASHTAGS
     if source_name:
@@ -377,9 +384,11 @@ async def media_submission_handler(event):
         await event.respond("❌ Target channel မသတ်မှတ်ရသေးပါ။ Code ထဲမှာ TARGET_CHANNEL ထည့်ပါ။")
         return
     try:
-        caption = build_caption(event.text or "")
-        for target in targets:
-            await client.send_file(target, event.media, caption=caption)
+        caption = await build_caption(event.text or "")
+        await asyncio.gather(*(
+            client.send_file(target, event.media, caption=caption)
+            for target in targets
+        ))
         data["stats"]["submitted_posts"] += 1
         await event.respond("✅ Media တင်ပြီးပါပြီ။")
     except Exception as exc:
@@ -402,12 +411,17 @@ async def approved_source_listener(event):
         return
     try:
         source_name = getattr(chat, "username", None) or str(chat.id)
-        caption = build_caption(event.text or "", source_name if getattr(chat, "username", None) else None)
-        for target in data["target_channels"]:
-            if event.media:
-                await client.send_file(target, event.media, caption=caption)
-            else:
-                await client.send_message(target, caption)
+        caption = await build_caption(event.text or "", source_name if getattr(chat, "username", None) else None)
+        if event.media:
+            await asyncio.gather(*(
+                client.send_file(target, event.media, caption=caption)
+                for target in data["target_channels"]
+            ))
+        else:
+            await asyncio.gather(*(
+                client.send_message(target, caption)
+                for target in data["target_channels"]
+            ))
         data["stats"]["source_posts"] += 1
     except Exception as exc:
         data["stats"]["failed_posts"] += 1
