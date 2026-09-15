@@ -206,6 +206,7 @@ client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 @client.on(events.NewMessage(pattern=r"^/(start|rules|help|status|channels|stats)$"))
 async def public_commands(event):
     command = event.pattern_match.group(1)
+    print(f"Received /{command} from user_id={event.sender_id}", flush=True)
     if command == "start":
         await event.respond(WELCOME, buttons=main_keyboard())
     elif command == "rules":
@@ -435,4 +436,6 @@ if __name__ == "__main__":
     print("Telegram Auto Post Bot is running")
     print("Admins:", ", ".join(ADMIN_NAMES.values()))
     client.start(bot_token=BOT_TOKEN)
+    me = client.loop.run_until_complete(client.get_me())
+    print(f"Connected as @{getattr(me, 'username', None) or me.id}", flush=True)
     client.run_until_disconnected()
